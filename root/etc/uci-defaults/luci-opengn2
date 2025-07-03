@@ -1,0 +1,49 @@
+#!/bin/sh
+
+uci -q batch <<-EOF >/dev/null
+	set dhcp.@dnsmasq[0].localuse=1
+	commit dhcp
+	[ -e "/etc/config/ucitrack" ] && {
+	delete ucitrack.@opengn2[-1]
+	add ucitrack opengn2
+	set ucitrack.@opengn2[-1].init=opengn2
+	commit ucitrack
+	}
+	delete firewall.opengn2
+	set firewall.opengn2=include
+	set firewall.opengn2.type=script
+	set firewall.opengn2.path=/var/etc/opengn2.include
+	set firewall.opengn2.reload=1
+	commit firewall
+	[ -e "/etc/config/ucitrack" ] && {
+	delete ucitrack.@opengn2_server[-1]
+	add ucitrack opengn2_server
+	set ucitrack.@opengn2_server[-1].init=opengn2_server
+	commit ucitrack
+	}
+	delete firewall.opengn2_server
+	set firewall.opengn2_server=include
+	set firewall.opengn2_server.type=script
+	set firewall.opengn2_server.path=/var/etc/opengn2_server.include
+	set firewall.opengn2_server.reload=1
+	commit firewall
+	set uhttpd.main.max_requests=50
+	commit uhttpd
+EOF
+
+[ ! -s "/etc/config/opengn2" ] && cp -f /usr/share/opengn2/0_default_config /etc/config/opengn2
+
+chmod +x /usr/share/opengn2/*.sh
+
+[ -e "/etc/config/opengn2_show" ] && rm -rf /etc/config/opengn2_show
+
+[ "$(uci -q get opengn2.@global_xray[0].sniffing)" == "1" ] && [ "$(uci -q get opengn2.@global_xray[0].route_only)" != "1" ] && uci -q set opengn2.@global_xray[0].sniffing_override_dest=1
+uci -q delete opengn2.@global_xray[0].sniffing
+uci -q delete opengn2.@global_xray[0].route_only
+uci -q commit opengn2
+
+rm -f /tmp/luci-indexcache
+rm -rf /tmp/luci-modulecache/
+killall -HUP rpcd 2>/dev/null
+
+exit 0
